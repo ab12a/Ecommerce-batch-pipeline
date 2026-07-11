@@ -24,7 +24,7 @@ This project demonstrates how modern data engineering technologies can be integr
 
 # Project Overview
 
-The objective of this project is to build a reproducible batch data processing system capable of processing large-scale e-commerce event data.
+The objective of this project is to build a reproducible batch data processing system capable of processing large scale e-commerce event data.
 
 The pipeline performs the following tasks:
 
