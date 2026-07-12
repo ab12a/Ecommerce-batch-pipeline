@@ -1,6 +1,6 @@
 # Ecommerce Batch Data Pipeline
 
-An end to end batch data processing pipeline built with **Apache Spark**, **Apache Kafka**, **PostgreSQL**, **Apache Airflow**, and **Docker Compose**.
+An end-to-end batch data processing pipeline built with **Apache Spark**, **Apache Kafka**, **PostgreSQL**, **Apache Airflow**, **MinIO**, and **Docker Compose**.
 
 This project demonstrates how modern data engineering technologies can be integrated into a reproducible microservices architecture for ingesting, processing, storing, and orchestrating e-commerce event data.
 
@@ -15,8 +15,13 @@ This project demonstrates how modern data engineering technologies can be integr
 - [Data Pipeline Workflow](#data-pipeline-workflow)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
+- [Environment Configuration](#environment-configuration)
+- [Custom Spark Image](#custom-spark-image)
+- [Dataset](#dataset)
 - [Running the Pipeline](#running-the-pipeline)
+- [SQL Queries](#sql-queries)
 - [Results](#results)
+- [Phase 3 Improvements](#phase-3-improvements)
 - [Future Improvements](#future-improvements)
 - [Author](#author)
 
@@ -24,12 +29,13 @@ This project demonstrates how modern data engineering technologies can be integr
 
 # Project Overview
 
-The objective of this project is to build a reproducible batch data processing system capable of processing large scale e-commerce event data.
+The objective of this project is to build a reproducible batch data processing system capable of processing large-scale e-commerce event data.
 
 The pipeline performs the following tasks:
 
 - Ingests raw e-commerce event data
 - Cleans and preprocesses the dataset using Apache Spark
+- Stores cleaned data in Parquet format
 - Streams processed events through Apache Kafka
 - Stores processed records in PostgreSQL
 - Performs batch aggregations using Spark
@@ -53,6 +59,11 @@ The complete environment is deployed locally using Docker Compose.
                                |
                                v
                     +----------------------+
+                    |   Parquet Dataset    |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
                     |   Kafka Producer     |
                     +----------+-----------+
                                |
@@ -66,15 +77,17 @@ The complete environment is deployed locally using Docker Compose.
                     |   Kafka Consumer     |
                     +----------+-----------+
                                |
-                               v
-                    +----------------------+
-                    |     PostgreSQL       |
-                    +----------+-----------+
-                               ^
-                               |
-                    +----------------------+
-                    |   Apache Airflow     |
-                    +----------------------+
+              +----------------+----------------+
+              |                                 |
+              v                                 v
+     +----------------------+          +----------------------+
+     |   JSON Output File   |          |     PostgreSQL       |
+     +----------------------+          +----------------------+
+                                                  ^
+                                                  |
+                                        +----------------------+
+                                        |   Apache Airflow     |
+                                        +----------------------+
 ```
 
 ---
@@ -88,8 +101,9 @@ The complete environment is deployed locally using Docker Compose.
 | PostgreSQL | Persistent storage |
 | Apache Airflow | Workflow orchestration |
 | Docker Compose | Container orchestration |
+| Docker | Containerization |
 | MinIO | Object storage |
-| Python | ETL scripts |
+| Python | ETL scripting |
 
 ---
 
@@ -99,7 +113,9 @@ The complete environment is deployed locally using Docker Compose.
 ecommerce_batch_pipeline/
 
 ├── airflow/
-│   └── dags/
+│   ├── dags/
+│   ├── logs/
+│   └── plugins/
 │
 ├── data/
 │   ├── raw/
@@ -108,8 +124,19 @@ ecommerce_batch_pipeline/
 │
 ├── spark/
 │   └── scripts/
+│       ├── read_data.py
+│       ├── read_parquet.py
+│       ├── kafka_producer.py
+│       ├── kafka_consumer.py
+│       ├── kafka_2_postgres.py
+│       └── aggregate_data.py
 │
+├── sql/
+│   └── sample_queries.sql
+│
+├── Dockerfile
 ├── docker-compose.yml
+├── .env
 ├── README.md
 └── .gitignore
 ```
@@ -120,12 +147,13 @@ ecommerce_batch_pipeline/
 
 1. Load the raw e-commerce dataset.
 2. Apache Spark cleans and preprocesses the data.
-3. Spark exports the processed records.
+3. Cleaned data is stored in Parquet format.
 4. Kafka Producer publishes events to the `customer-events` topic.
 5. Kafka Consumer reads events from Kafka.
-6. Events are stored in PostgreSQL.
-7. Spark performs analytical aggregations.
-8. Apache Airflow orchestrates the overall workflow.
+6. Events are written to a JSON file.
+7. Events are stored in PostgreSQL.
+8. Spark performs analytical aggregations.
+9. Apache Airflow orchestrates the workflow.
 
 ---
 
@@ -153,6 +181,12 @@ Navigate to the project directory:
 cd Ecommerce-batch-pipeline
 ```
 
+Build the custom Spark image:
+
+```bash
+docker compose build
+```
+
 Start all services:
 
 ```bash
@@ -167,11 +201,45 @@ docker ps
 
 ---
 
+# Environment Configuration
+
+The project uses a `.env` file to centralize configuration values.
+
+The following settings are configurable:
+
+- Spark master URL
+- Raw dataset path
+- Processed Parquet path
+- Kafka bootstrap server
+- Kafka topic
+- Kafka output path
+- PostgreSQL credentials
+- MinIO credentials
+
+Docker Compose automatically loads these variables during startup.
+
+---
+
+# Custom Spark Image
+
+A custom Docker image is used for Apache Spark.
+
+The image automatically installs the required Python packages:
+
+- kafka-python
+- psycopg2-binary
+
+This eliminates manual package installation and improves reproducibility.
+
+---
+
 # Dataset
 
 This project uses the **October 2019 E-commerce Dataset**.
 
-> **Note:** The dataset is not included in this repository because of its large size. Download it separately and place it in:
+> **Note:** The dataset is not included in this repository because of its large size.
+
+Download the dataset separately and place it in:
 
 ```text
 data/raw/
@@ -181,25 +249,49 @@ data/raw/
 
 # Running the Pipeline
 
-Execute the Spark ETL job:
+Run the Spark ETL job:
 
 ```bash
 docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/read_data.py
 ```
 
-Run the Kafka producer:
+Verify the generated Parquet dataset:
 
 ```bash
-docker exec -it spark python3 /opt/spark/scripts/kafka_producer.py
+docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/read_parquet.py
 ```
 
-Run the Kafka consumer:
+Publish records to Kafka:
 
 ```bash
-docker exec -it spark python3 /opt/spark/scripts/kafka_2_postgres.py
+docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/kafka_producer.py
 ```
 
-Verify the data in PostgreSQL:
+Consume Kafka messages and write them to JSON:
+
+```bash
+docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/kafka_consumer.py
+```
+
+Consume Kafka messages and store them in PostgreSQL:
+
+```bash
+docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/kafka_2_postgres.py
+```
+
+Run Spark aggregation:
+
+```bash
+docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/aggregate_data.py
+```
+
+Verify PostgreSQL:
+
+```bash
+docker exec -it postgres psql -U admin -d ecommerce
+```
+
+Example query:
 
 ```sql
 SELECT COUNT(*) FROM customer_events;
@@ -207,16 +299,56 @@ SELECT COUNT(*) FROM customer_events;
 
 ---
 
+# SQL Queries
+
+Example SQL queries are provided in:
+
+```text
+sql/sample_queries.sql
+```
+
+These queries demonstrate how to:
+
+- Validate imported data
+- Count records
+- Analyse event types
+- Analyse product brands
+- Analyse user activity
+- Explore product pricing
+
+---
+
 # Results
 
-The completed pipeline successfully demonstrates:
+The pipeline was successfully tested end-to-end.
 
-- Dockerized microservices
+The completed workflow performs:
+
+- CSV ingestion
 - Spark ETL processing
-- Kafka event streaming
-- PostgreSQL persistence
-- Batch aggregation using Spark
-- Workflow orchestration using Airflow
+- Parquet generation
+- Kafka message publishing
+- Kafka message consumption
+- JSON export
+- PostgreSQL data persistence
+- Spark aggregation
+- SQL validation queries
+
+---
+
+# Phase 3 Improvements
+
+The project was enhanced with several improvements:
+
+- Custom Spark Docker image
+- Automatic installation of Python dependencies
+- Centralized configuration using `.env`
+- Improved logging
+- Exception handling
+- SQL validation queries
+- Improved Docker Compose configuration
+- End-to-end pipeline testing
+- Cleaner and more maintainable project structure
 
 ---
 
@@ -227,7 +359,7 @@ Possible future enhancements include:
 - Spark Structured Streaming for real-time processing
 - CI/CD pipeline using GitHub Actions
 - Centralized logging and monitoring
-- Cloud deployment (AWS/Azure/GCP)
+- Cloud deployment (AWS, Azure, or GCP)
 - Secrets management for credentials
 - Dashboard visualization using Grafana
 
