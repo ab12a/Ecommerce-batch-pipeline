@@ -1,5 +1,11 @@
 # Ecommerce Batch Data Pipeline
 
+![Docker](https://img.shields.io/badge/Docker-Compose-blue)
+![Spark](https://img.shields.io/badge/Apache-Spark-orange)
+![Kafka](https://img.shields.io/badge/Apache-Kafka-black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![Python](https://img.shields.io/badge/Python-3.8+-green)
+
 An end-to-end batch data processing pipeline built with **Apache Spark**, **Apache Kafka**, **PostgreSQL**, **Apache Airflow**, **MinIO**, and **Docker Compose**.
 
 This project demonstrates how modern data engineering technologies can be integrated into a reproducible microservices architecture for ingesting, processing, storing, and orchestrating e-commerce event data.
@@ -153,7 +159,7 @@ ecommerce_batch_pipeline/
 6. Events are written to a JSON file.
 7. Events are stored in PostgreSQL.
 8. Spark performs analytical aggregations.
-9. Apache Airflow orchestrates the workflow.
+9. Apache Airflow is available for workflow orchestration.
 
 ---
 
@@ -213,10 +219,10 @@ The following settings are configurable:
 - Kafka bootstrap server
 - Kafka topic
 - Kafka output path
-- PostgreSQL credentials
+- PostgreSQL host, port, and credentials
 - MinIO credentials
 
-Docker Compose automatically loads these variables during startup.
+Docker Compose automatically loads these environment variables when the services are started.
 
 ---
 
@@ -229,25 +235,50 @@ The image automatically installs the required Python packages:
 - kafka-python
 - psycopg2-binary
 
-This eliminates manual package installation and improves reproducibility.
+This eliminates manual package installation and improves project reproducibility.
 
 ---
 
 # Dataset
 
-This project uses the **October 2019 E-commerce Dataset**.
+This project uses the **October 2019 E-commerce Behavior Dataset**.
+
+The dataset can be downloaded from Kaggle:
+
+https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store
 
 > **Note:** The dataset is not included in this repository because of its large size.
 
-Download the dataset separately and place it in:
+After downloading, place the following file:
+
+```text
+2019-Oct.csv.gz
+```
+
+inside:
 
 ```text
 data/raw/
 ```
 
+> **Development Note:**  
+> For faster execution during development and testing, the ETL pipeline processes the first **10,000 records** from the dataset. This limit can be adjusted or removed in `spark/scripts/read_data.py`.
+
 ---
 
 # Running the Pipeline
+
+Build the custom Spark image (first run only):
+
+```bash
+docker compose build
+```
+
+Start all services:
+
+```bash
+docker compose up -d
+```
 
 Run the Spark ETL job:
 
@@ -273,7 +304,7 @@ Consume Kafka messages and write them to JSON:
 docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/kafka_consumer.py
 ```
 
-Consume Kafka messages and store them in PostgreSQL:
+Create the `customer_events` table in PostgreSQL (first run only), then load the data:
 
 ```bash
 docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/kafka_2_postgres.py
@@ -285,7 +316,7 @@ Run Spark aggregation:
 docker exec -it spark /opt/spark/bin/spark-submit /opt/spark/scripts/aggregate_data.py
 ```
 
-Verify PostgreSQL:
+Verify the imported records:
 
 ```bash
 docker exec -it postgres psql -U admin -d ecommerce
@@ -295,6 +326,12 @@ Example query:
 
 ```sql
 SELECT COUNT(*) FROM customer_events;
+```
+
+Stop the environment:
+
+```bash
+docker compose down
 ```
 
 ---
@@ -315,6 +352,12 @@ These queries demonstrate how to:
 - Analyse product brands
 - Analyse user activity
 - Explore product pricing
+
+Run the queries using:
+
+```bash
+docker exec -it postgres psql -U admin -d ecommerce
+```
 
 ---
 
